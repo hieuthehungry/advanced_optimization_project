@@ -4,9 +4,10 @@ from base_model import BaseModel
 
 class SoftmaxRegression(BaseModel):
     def __init__(self, num_classes, learning_rate=0.01, num_iterations=1000, do_one_hot=False, lambda1=0, lambda2=0,
-    momentum=0, alpha=0.3, beta=0.8, early_stop = 5, mode = "iteration", experiment_name = "softmax_reg_gd"):
+    momentum=0, alpha=0.3, beta=0.8, early_stop = 5, mode = "iteration", do_backtrack = False, experiment_name = "softmax_reg_gd"):
         super().__init__(num_classes, learning_rate, num_iterations, do_one_hot, lambda1, lambda2, momentum, alpha, beta, early_stop, mode, experiment_name)
-    
+        self.do_backtrack = do_backtrack
+
     # momentum: thay đổi momentum
     # alpha=0.3, beta=0.8
     def __init_params__(self, X):
@@ -41,29 +42,39 @@ class SoftmaxRegression(BaseModel):
         db = (1 / self.m) * np.sum(y_pred - y_train, axis=0, keepdims=True)
         
         # Backtracking line search
-        while True:
+        if self.do_backtrack:
+            while True:
+                v_w_prev = v_w
+                v_b_prev = v_b
+
+                v_w = self.momentum * v_w - self.learning_rate * dw
+                v_b = self.momentum * v_b - self.learning_rate * db
+
+                weights_temp = W - self.momentum * v_w_prev + (1 + self.momentum) * v_w
+                bias_temp = b - self.momentum * v_b_prev + (1 + self.momentum) * v_b
+
+                linear_output_temp = np.dot(X_train, weights_temp) + bias_temp
+                y_pred_temp = softmax(linear_output_temp)
+                loss_temp = cross_entropy_loss(y_train, y_pred_temp) + self.lambda1 * np.sum(np.abs(W)) +  self.lambda2 * np.sum(W**2)
+
+                if loss_temp <= cross_entropy_loss(y_train, y_pred) - self.alpha * self.learning_rate * (
+                    np.linalg.norm(dw) ** 2 + np.linalg.norm(db) ** 2
+                ):
+                    break
+                else:
+                    self.learning_rate *= self.beta
+
+            W = weights_temp
+            b = bias_temp
+        else:
             v_w_prev = v_w
             v_b_prev = v_b
 
             v_w = self.momentum * v_w - self.learning_rate * dw
             v_b = self.momentum * v_b - self.learning_rate * db
 
-            weights_temp = W - self.momentum * v_w_prev + (1 + self.momentum) * v_w
-            bias_temp = b - self.momentum * v_b_prev + (1 + self.momentum) * v_b
-
-            linear_output_temp = np.dot(X_train, weights_temp) + bias_temp
-            y_pred_temp = softmax(linear_output_temp)
-            loss_temp = cross_entropy_loss(y_train, y_pred_temp) + self.lambda1 * np.sum(np.abs(W)) +  self.lambda2 * np.sum(W**2)
-
-            if loss_temp <= cross_entropy_loss(y_train, y_pred) - self.alpha * self.learning_rate * (
-                np.linalg.norm(dw) ** 2 + np.linalg.norm(db) ** 2
-            ):
-                break
-            else:
-                self.learning_rate *= self.beta
-
-        W = weights_temp
-        b = bias_temp
+            W = W - self.momentum * v_w_prev + (1 + self.momentum) * v_w
+            b = b - self.momentum * v_b_prev + (1 + self.momentum) * v_b
         self.v_w = v_w
         self.v_b = v_b
         return W, b
