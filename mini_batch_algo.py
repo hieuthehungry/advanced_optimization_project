@@ -47,11 +47,11 @@ class SoftmaxRegressionSGD(BaseModel):
             
             # Backward pass (compute gradients) with L1 and L2 computation
             dw = (
-                (1 / self.m) * np.dot(X_batch.T, (y_pred - y_batch))
+                (1 / self.batch_size) * np.dot(X_batch.T, (y_pred - y_batch))
                 + self.lambda1 * np.sign(W)
                 + self.lambda2 * W
             )
-            db = (1 / self.m) * np.sum(y_pred - y_batch, axis=0, keepdims=True)
+            db = (1 / self.batch_size) * np.sum(y_pred - y_batch, axis=0, keepdims=True)
 
             # Backtracking line search
             if self.do_backtrack:
@@ -89,7 +89,8 @@ class SoftmaxRegressionSGD(BaseModel):
 
                 W = W - self.momentum * v_w_prev + (1 + self.momentum) * v_w
                 b = b - self.momentum * v_b_prev + (1 + self.momentum) * v_b
-
+                self.v_w = v_w
+                self.v_b = v_b
             
         return W, b
     
@@ -224,27 +225,28 @@ if  __name__ == "__main__":
 
     import os
     import pickle as pkl
-
+    import json
     # vers = ["", "_3_turns", "_5_turns", "_7_turns", "_8_turns", "_9_turns"]
-    vers = [ "_5_turns"]
+    ver = "_5_turns"
     os.makedirs("history", exist_ok = True)
 
     val_acc = {}
-    for ver in vers:        
-        X_train = np.load(f"split_data/X{ver}_train.npy")
-        Y_train = np.load(f"split_data/Y{ver}_train.npy")
-        X_val = np.load(f"split_data/X{ver}_val.npy")
-        Y_val = np.load(f"split_data/Y{ver}_val.npy")
+    X_train = np.load(f"split_data/X{ver}_train.npy")
+    Y_train = np.load(f"split_data/Y{ver}_train.npy")
+    # X_train = np.load(f"./vector_data/X_5_turns.npy")
+    # Y_train = np.load(f"./vector_data/Y_5_turns.npy")
+    X_val = np.load(f"split_data/X{ver}_val.npy")
+    Y_val = np.load(f"split_data/Y{ver}_val.npy")
         
-        print(f"training with ver {ver}")
-        # model = SoftmaxRegressionMiniAdam(num_classes= Y_val.shape[1], early_stop= 100, learning_rate=0.01, do_one_hot= False, alpha = 0, beta = 0.9, experiment_name=f"exp{ver}")
-        model = SoftmaxRegressionSGD(num_classes= Y_val.shape[1], early_stop= 1000, learning_rate=0.1, do_backtrack= True,  do_one_hot= False, alpha = 0.3, beta = 0.9, experiment_name=f"exp{ver}")
-        model.train(X_train, Y_train, X_val, Y_val)
-        
-        val_acc[f"exp{model.training_info['model_name']}{ver}"] = model.training_info["best_accuracy"]
-        
-        with open(f"history/exp{model.training_info['model_name']}{ver}.pkl", "wb") as f:
-            pkl.dump(model.training_info, f)
+    print(f"training with ver {ver}")
+    # model = SoftmaxRegressionMiniAdam(num_classes= Y_val.shape[1], early_stop= 100, learning_rate=0.01, do_one_hot= False, alpha = 0, beta = 0.9, experiment_name=f"exp{ver}")
+    model = SoftmaxRegressionSGD(num_classes= Y_val.shape[1], early_stop= 1000, learning_rate=0.5, batch_size= 64, do_backtrack= True,  do_one_hot= False, alpha = 0.3, beta = 0.9, experiment_name=f"exp{ver}")
+    model.train(X_train, Y_train, X_val, Y_val)
+    
+    val_acc[f"exp{model.training_info['model_name']}_normal"] = model.training_info["best_accuracy"]
+    
+    with open(f"history/exp{model.training_info['model_name']}_normal.pkl", "wb") as f:
+        pkl.dump(model.training_info, f)
     
     sorted_dict= dict(sorted(val_acc.items(), key=lambda item: item[1], reverse=True))
     print(sorted_dict)
