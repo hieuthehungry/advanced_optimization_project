@@ -3,10 +3,12 @@ from utils import cross_entropy_loss, softmax, predict, one_hot, save_weight, sa
 from base_model import BaseModel
 
 class SoftmaxRegressionNewton(BaseModel):
-    def __init__(self, num_classes, learning_rate=0.01, num_iterations=1000, do_one_hot=False, lambda1=0, lambda2=0,
-    momentum=0, alpha=0.3, beta=0.8, early_stop = 5, mode = "time", experiment_name = "softmax_reg_gd"):
-        self.super().__init__(num_classes, learning_rate, num_iterations, do_one_hot, lambda1, lambda2, momentum, alpha, beta, early_stop, mode, experiment_name)
-
+    def __init__(self, num_classes, learning_rate=0.01, num_iterations=20, do_one_hot=False, lambda1=0, lambda2=0,
+    momentum=0, alpha=0.3, beta=0.8, early_stop = 5, mode = "iteration", experiment_name = "softmax_reg_newton"):
+        super().__init__(num_classes, learning_rate, num_iterations, do_one_hot, lambda1, lambda2, momentum, alpha, beta, early_stop, mode, experiment_name)
+    
+        self.training_info["model_name"] = "softmax_newton"
+    
     def __init_params__(self, X):
         self.m, self.n = X.shape
         W = np.random.randn(self.n, self.num_classes) * 0.01
@@ -31,7 +33,7 @@ class SoftmaxRegressionNewton(BaseModel):
         # loss = cross_entropy_loss(y, y_pred) + self.lambda1 * np.sum(np.abs(W)) +  self.lambda2 * np.sum(W**2)
 
         # Backward pass (compute gradients) with L1 and L2 computation
-        W, b = newton_optimizer(X, y, W, b, self.learning_rate, self.do_one_hot, lambda1, lambda2)
+        W, b = newton_optimizer(X_train, y_train, W, b, self.learning_rate, self.do_one_hot, self.lambda1, self.lambda2)
 
         return W, b
 # X = np.load("X.npy")
@@ -93,26 +95,31 @@ def newton_optimizer(X, y, W, b, learning_rate=1.0, do_one_hot = False, lambda1=
     return W, b
 
 
-if __name__ == "__main__":
-    import pickle
+if  __name__ == "__main__":
 
-    X = np.load("X.npy")
-    y = np.load("Y.npy")
-    num_classes = y.shape[1]
+    import os
+    import pickle as pkl
 
-    # Regularization parameters
-    lambda1 = 0.00  # L1 regularization
-    lambda2 = 0.00  # L2 regularization
+    # vers = ["", "_3_turns", "_5_turns", "_7_turns", "_8_turns", "_9_turns"]
+    vers = [ "_5_turns"]
+    os.makedirs("history", exist_ok = True)
 
-    learning_rate = 0.1
-    # Train the model
-    model = SoftmaxRegressionNewton()
-    model.trai(X, y, X, y)
-    W, b, loss_history = softmax_regression_newton_raphson(X, y, num_classes, learning_rate = learning_rate, num_iterations = 100, lambda1=lambda1, lambda2=lambda2, do_one_hot = False)
-
-    # Make predictions
-    y_pred = predict(X, W, b)
-    predicted_classes = np.argmax(y_pred, axis=1)
-
-    print("Predicted classes:", predicted_classes)
-
+    val_acc = {}
+    for ver in vers:        
+        X_train = np.load(f"split_data/X{ver}_train.npy")
+        Y_train = np.load(f"split_data/Y{ver}_train.npy")
+        X_val = np.load(f"split_data/X{ver}_val.npy")
+        Y_val = np.load(f"split_data/Y{ver}_val.npy")
+        
+        print(f"training with ver {ver}")
+        # model = SoftmaxAdam(num_classes= Y_val.shape[1], early_stop= 100, learning_rate=0.01, do_one_hot= False, experiment_name=f"exp{ver}")
+        model = SoftmaxRegressionNewton(num_classes= Y_val.shape[1], early_stop= 5, learning_rate=1, do_one_hot= False, experiment_name=f"exp{ver}")
+        model.train(X_train, Y_train, X_val, Y_val)
+        
+        val_acc[f"exp{model.training_info["model_name"]}{ver}"] = model.training_info["best_accuracy"]
+        
+        with open(f"history/exp{ver}.pkl", "wb") as f:
+            pkl.dump(model.training_info, f)
+    
+    sorted_dict= dict(sorted(val_acc.items(), key=lambda item: item[1], reverse=True))
+    print(sorted_dict)

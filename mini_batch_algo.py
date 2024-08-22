@@ -4,11 +4,12 @@ from base_model import BaseModel
 
 class SoftmaxRegressionSGD(BaseModel):
     def __init__(self, num_classes, learning_rate=0.01, num_iterations=1000, do_one_hot=False, lambda1=0, lambda2=0,
-    momentum=0, alpha=0.3, beta=0.8, early_stop = 5, mode = "time", experiment_name = "softmax_reg_gd", batch_size = 256, do_shuffle = True):
-        self.super().__init__(num_classes, learning_rate, num_iterations, do_one_hot, lambda1, lambda2, momentum, alpha, beta, early_stop, mode, experiment_name)
+    momentum=0, alpha=0.3, beta=0.8, early_stop = 5, mode = "iteration", experiment_name = "softmax_reg_sgd", do_backtrack = False, batch_size = 256, do_shuffle = True):
+        super().__init__(num_classes, learning_rate, num_iterations, do_one_hot, lambda1, lambda2, momentum, alpha, beta, early_stop, mode, experiment_name)
+        self.training_info["model_name"] = "softmax_reg_sgd"
         self.batch_size = batch_size
         self.do_shuffle = do_shuffle
-
+        self.do_backtrack = do_backtrack
 
 
     def __init_params__(self, X):
@@ -46,100 +47,76 @@ class SoftmaxRegressionSGD(BaseModel):
             
             # Backward pass (compute gradients) with L1 and L2 computation
             dw = (
-                (1 / self.m) * np.dot(X_train.T, (y_pred - y_train))
+                (1 / self.m) * np.dot(X_batch.T, (y_pred - y_batch))
                 + self.lambda1 * np.sign(W)
                 + self.lambda2 * W
             )
-            db = (1 / self.m) * np.sum(y_pred - y_train, axis=0, keepdims=True)
+            db = (1 / self.m) * np.sum(y_pred - y_batch, axis=0, keepdims=True)
 
             # Backtracking line search
-            while True:
+            if self.do_backtrack:
+                while True:
+                    v_w_prev = v_w
+                    v_b_prev = v_b
+
+                    v_w = self.momentum * v_w - self.learning_rate * dw
+                    v_b = self.momentum * v_b - self.learning_rate * db
+
+                    weights_temp = W - self.momentum * v_w_prev + (1 + self.momentum) * v_w
+                    bias_temp = b - self.momentum * v_b_prev + (1 + self.momentum) * v_b
+
+                    linear_output_temp = np.dot(X_batch, weights_temp) + bias_temp
+                    y_pred_temp = softmax(linear_output_temp)
+                    loss_temp = cross_entropy_loss(y_batch, y_pred_temp) + self.lambda1 * np.sum(np.abs(W)) +  self.lambda2 * np.sum(W**2)
+
+                    if loss_temp <= cross_entropy_loss(y_batch, y_pred)+ self.lambda1 * np.sum(np.abs(W)) +  self.lambda2 * np.sum(W**2) - self.alpha * self.learning_rate * (
+                        np.linalg.norm(dw) ** 2 + np.linalg.norm(db) ** 2
+                    ):
+                        break
+                    else:
+                        self.learning_rate *= self.beta
+                
+                W = weights_temp
+                b = bias_temp
+                self.v_w = v_w
+                self.v_b = v_b
+            else:
                 v_w_prev = v_w
                 v_b_prev = v_b
 
                 v_w = self.momentum * v_w - self.learning_rate * dw
                 v_b = self.momentum * v_b - self.learning_rate * db
 
-                weights_temp = W - self.momentum * v_w_prev + (1 + self.momentum) * v_w
-                bias_temp = b - self.momentum * v_b_prev + (1 + self.momentum) * v_b
+                W = W - self.momentum * v_w_prev + (1 + self.momentum) * v_w
+                b = b - self.momentum * v_b_prev + (1 + self.momentum) * v_b
 
-                linear_output_temp = np.dot(X_batch, weights_temp) + bias_temp
-                y_pred_temp = softmax(linear_output_temp)
-                loss_temp = cross_entropy_loss(y_train, y_pred_temp) + self.lambda1 * np.sum(np.abs(W)) +  self.lambda2 * np.sum(W**2)
-
-                if loss_temp <= cross_entropy_loss(y_batch, y_pred)+ self.lambda1 * np.sum(np.abs(W)) +  self.lambda2 * np.sum(W**2) - self.alpha * self.learning_rate * (
-                    np.linalg.norm(dw) ** 2 + np.linalg.norm(db) ** 2
-                ):
-                    break
-                else:
-                    self.learning_rate *= self.beta
-
-                W = weights_temp
-                b = bias_temp
-        self.v_w = v_w
-        self.v_b = v_b
+            
         return W, b
     
 
 
-class SoftmaxAdam(BaseModel):
-    def __init__(self, num_classes, learning_rate=0.01, num_iterations=1000, do_one_hot=False, lambda1=0, lambda2=0,
-    momentum=0, alpha=0.3, beta=0.8, early_stop = 5, mode = "time", experiment_name = "softmax_adam", beta1=0.9, beta2=0.999, epsilon=1e-8,  lambda1 = 0, lambda2= 0, batch_size = 256, do_shuffle = True):
-        self.super().__init__(num_classes, learning_rate, num_iterations, do_one_hot, lambda1, lambda2, momentum, alpha, beta, early_stop, mode, experiment_name)
-        self.beta1=beta1, 
-        self.beta2=beta2
-        self.epsilon=epsilon
-        self.lambda1 = lambda1, 
-        self.lambda2= lambda2
-        self.batch_size = batch_size
-        self.do_shuffle = do_shuffle
-
-    def __init_params__(self, X):
-        self.m, self.n = X.shape
-        W = np.random.randn(self.n, self.num_classes) * 0.01
-        b = np.zeros((1, self.num_classes))
-        self.mW, self.mb = np.zeros_like(self.W), np.zeros_like(self.b)
-        self.vW, self.vb = np.zeros_like(self.W), np.zeros_like(self.b)
-        return W, b
-    def train_iter(self, X_train, y_train, t, W = None, b = None):
-        if t == 1:
-            W, b = self.__init_params__(X_train)
-        
-        mW, mb = self.mW, self.mb
-        vW, vb = self.vW, self.vb
-        logits = np.dot(X_train, W) + b
-        y_pred = softmax(logits)
-
-        # Compute loss
-        # loss = cross_entropy_loss(y, y_pred)
-
-        # Backward pass (compute gradients)
-        dw = (1 / self.m) * np.dot(X.T, (y_pred - y_train))
-        db = (1 / self.m) * np.sum(y_pred - y_train, axis=0, keepdims=True)
-
-        # Update weights and biases using Adam
-        W, b, mW, mb, vW, vb = adam_optimizer(W, b, dw, db, mW, mb, vW, vb, t, self.learning_rate, self.beta1, self.beta2, self.epsilon)
-        self.mW, self.mb, self.vW, self.vb = mW, mb, vW, vb    
-        return W, b
-    
 
 
 
 class SoftmaxRegressionMiniAdam(BaseModel):
     def __init__(self, num_classes, learning_rate=0.01, num_iterations=1000, do_one_hot=False, lambda1=0, lambda2=0,
-    momentum=0, alpha=0.3, beta=0.8, early_stop = 5, mode = "time", experiment_name = "softmax_reg_gd", batch_size = 256, do_shuffle = True):
-        self.super().__init__(num_classes, learning_rate, num_iterations, do_one_hot, lambda1, lambda2, momentum, alpha, beta, early_stop, mode, experiment_name)
+    momentum=0, alpha=0.3, beta=0.8, early_stop = 5, mode = "iteration", experiment_name = "softmax_mini_adam", do_backtrack = False, beta1=0.9, beta2=0.999, epsilon=1e-8, batch_size = 256, do_shuffle = True):
+        super().__init__(num_classes, learning_rate, num_iterations, do_one_hot, lambda1, lambda2, momentum, alpha, beta, early_stop, mode, experiment_name)
         self.batch_size = batch_size
         self.do_shuffle = do_shuffle
-
-
+        self.beta1 = beta1
+        self.beta2 = beta2
+        self.epsilon = epsilon
+        self.training_info["model_name"] = "softmax_mini_adam"
+        self.do_backtrack = do_backtrack
 
     def __init_params__(self, X):
         self.m, self.n = X.shape
         W = np.random.randn(self.n, self.num_classes) * 0.01
         b = np.zeros((1, self.num_classes))
-        self.vW = np.zeros_like(W)
-        self.vb = np.zeros_like(b)
+
+        self.mW, self.mb = np.zeros_like(W), np.zeros_like(b)
+        self.vW, self.vb = np.zeros_like(W), np.zeros_like(b)
 
         return W, b
     
@@ -150,8 +127,10 @@ class SoftmaxRegressionMiniAdam(BaseModel):
         
         vW = self.vW
         vb = self.vb
-
-        
+        mW = self.mW
+        mb = self.mb
+        # v_w = self.v_w
+        # v_b = self.v_b
 
         # Compute loss
         if self.do_shuffle:
@@ -166,41 +145,47 @@ class SoftmaxRegressionMiniAdam(BaseModel):
             y_batch = y_shuffled[i:i + self.batch_size]
             logits = np.dot(X_batch, W) + b
             y_pred = softmax(logits)
-            
+           
             # Backward pass (compute gradients) with L1 and L2 computation
             dw = (
-                (1 / self.m) * np.dot(X_train.T, (y_pred - y_train))
+                (1 / self.m) * np.dot(X_batch.T, (y_pred - y_batch))
                 + self.lambda1 * np.sign(W)
                 + self.lambda2 * W
             )
-            db = (1 / self.m) * np.sum(y_pred - y_train, axis=0, keepdims=True)
+            db = (1 / self.m) * np.sum(y_pred - y_batch, axis=0, keepdims=True)
 
             # Backtracking line search
-            while True:
-                v_w = self.momentum * v_w - self.learning_rate * dw
-                v_b = self.momentum * v_b - self.learning_rate * db
+            if self.do_backtrack:
+                while True:
+                    print(self.learning_rate)
+                    # v_w = self.momentum * v_w - self.learning_rate * dw
+                    # v_b = self.momentum * v_b - self.learning_rate * db
 
+                    dw = (1 / self.batch_size) * np.dot(X_batch.T, (y_pred - y_batch))
+                    db = (1 / self.batch_size) * np.sum(y_pred - y_batch, axis=0, keepdims=True)
+
+                    # Update weights and biases using Adam with regularization
+                    weights_temp, bias_temp, mW, mb, vW, vb = adam_optimizer(W, b, dw, db, mW, mb, vW, vb, t, self.learning_rate, self.beta1, self.beta2, self.epsilon, self.lambda1, self.lambda2)
+
+                    linear_output_temp = np.dot(X_batch, weights_temp) + bias_temp
+                    y_pred_temp = softmax(linear_output_temp)
+                    loss_temp = cross_entropy_loss(y_batch, y_pred_temp) + self.lambda1 * np.sum(np.abs(W)) +  self.lambda2 * np.sum(W**2)
+
+                    if loss_temp <= cross_entropy_loss(y_batch, y_pred)+ self.lambda1 * np.sum(np.abs(W)) +  self.lambda2 * np.sum(W**2) - self.alpha * self.learning_rate * (
+                        np.linalg.norm(dw) ** 2 + np.linalg.norm(db) ** 2
+                    ):
+                        break
+                    else:
+                        self.learning_rate *= self.beta
+                    self.mW, self.mb, self.vW, self.vb = mW, mb, vW, vb    
+                    W = weights_temp
+                    b = bias_temp
+            else:
                 dw = (1 / self.batch_size) * np.dot(X_batch.T, (y_pred - y_batch))
                 db = (1 / self.batch_size) * np.sum(y_pred - y_batch, axis=0, keepdims=True)
 
-                # Update weights and biases using Adam with regularization
-                weights_temp, bias_temp, mW, mb, vW, vb = adam_optimizer(W, b, dw, db, mW, mb, vW, vb, t, self.learning_rate, self.beta1, self.beta2, self.epsilon, self.lambda1, self.lambda2)
-
-                linear_output_temp = np.dot(X_batch, weights_temp) + bias_temp
-                y_pred_temp = softmax(linear_output_temp)
-                loss_temp = cross_entropy_loss(y_train, y_pred_temp) + self.lambda1 * np.sum(np.abs(W)) +  self.lambda2 * np.sum(W**2)
-
-                if loss_temp <= cross_entropy_loss(y_batch, y_pred)+ self.lambda1 * np.sum(np.abs(W)) +  self.lambda2 * np.sum(W**2) - self.alpha * self.learning_rate * (
-                    np.linalg.norm(dw) ** 2 + np.linalg.norm(db) ** 2
-                ):
-                    break
-                else:
-                    self.learning_rate *= self.beta
-
-                W = weights_temp
-                b = bias_temp
-        self.v_w = v_w
-        self.v_b = v_b
+                    # Update weights and biases using Adam with regularization
+                W, b, mW, mb, vW, vb = adam_optimizer(W, b, dw, db, mW, mb, vW, vb, t, self.learning_rate, self.beta1, self.beta2, self.epsilon, self.lambda1, self.lambda2)
         return W, b
     
 
@@ -235,51 +220,31 @@ def adam_optimizer(W, b, dw, db, mW, mb, vW, vb, t, learning_rate=0.001, beta1=0
     return W, b, mW, mb, vW, vb
 
 
-def softmax_minibatch_adam(X, y, num_classes, batch_size, do_one_hot = True, learning_rate=0.001, num_iterations=1000, beta1=0.9, beta2=0.999, epsilon=1e-8, lambda1=0.0, lambda2=0.0):
-    m, n = X.shape
-    W = np.random.randn(n, num_classes) * 0.01
-    b = np.zeros((1, num_classes))
+if  __name__ == "__main__":
 
-    if do_one_hot:
-      y_one_hot = one_hot(y, num_classes)
-    else:
-      y_one_hot = y
-      y = np.where(y_one_hot==1)[1]
+    import os
+    import pickle as pkl
 
-    # Initialize moment estimates
-    mW, mb = np.zeros_like(W), np.zeros_like(b)
-    vW, vb = np.zeros_like(W), np.zeros_like(b)
+    # vers = ["", "_3_turns", "_5_turns", "_7_turns", "_8_turns", "_9_turns"]
+    vers = [ "_5_turns"]
+    os.makedirs("history", exist_ok = True)
 
-    loss_history = []
-    for t in tqdm(range(1, num_iterations + 1)):
-        indices = np.random.permutation(m)
-        X_shuffled = X[indices]
-        y_shuffled = y_one_hot[indices]
-
-        for i in range(0, m, batch_size):
-            X_batch = X_shuffled[i:i + batch_size]
-            y_batch = y_shuffled[i:i + batch_size]
-
-            # Forward pass
-            logits = np.dot(X_batch, W) + b
-            y_pred = softmax(logits)
-
-            # Compute loss
-            loss = cross_entropy_loss(y_batch.argmax(axis=1), y_pred)
-
-            # Backward pass (compute gradients)
-            dw = (1 / batch_size) * np.dot(X_batch.T, (y_pred - y_batch))
-            db = (1 / batch_size) * np.sum(y_pred - y_batch, axis=0, keepdims=True)
-
-            # Update weights and biases using Adam with regularization
-            W, b, mW, mb, vW, vb = adam_optimizer(W, b, dw, db, mW, mb, vW, vb, t, learning_rate, beta1, beta2, epsilon, lambda1, lambda2)
-
-        if t % 100 == 0:
-            print(f"Iteration {t}, Loss: {loss}")
-
-        logits = np.dot(X, W) + b
-        y_pred = softmax(logits)
-        loss = cross_entropy_loss(y, y_pred)
-        loss_history.append(loss)
-
-    return W, b, loss_history
+    val_acc = {}
+    for ver in vers:        
+        X_train = np.load(f"split_data/X{ver}_train.npy")
+        Y_train = np.load(f"split_data/Y{ver}_train.npy")
+        X_val = np.load(f"split_data/X{ver}_val.npy")
+        Y_val = np.load(f"split_data/Y{ver}_val.npy")
+        
+        print(f"training with ver {ver}")
+        # model = SoftmaxRegressionMiniAdam(num_classes= Y_val.shape[1], early_stop= 100, learning_rate=0.01, do_one_hot= False, alpha = 0, beta = 0.9, experiment_name=f"exp{ver}")
+        model = SoftmaxRegressionSGD(num_classes= Y_val.shape[1], early_stop= 1000, learning_rate=0.1, do_backtrack= True,  do_one_hot= False, alpha = 0.3, beta = 0.9, experiment_name=f"exp{ver}")
+        model.train(X_train, Y_train, X_val, Y_val)
+        
+        val_acc[f"exp{model.training_info['model_name']}{ver}"] = model.training_info["best_accuracy"]
+        
+        with open(f"history/exp{model.training_info['model_name']}{ver}.pkl", "wb") as f:
+            pkl.dump(model.training_info, f)
+    
+    sorted_dict= dict(sorted(val_acc.items(), key=lambda item: item[1], reverse=True))
+    print(sorted_dict)
