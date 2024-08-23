@@ -7,7 +7,7 @@ class SoftmaxRegression(BaseModel):
     momentum=0, alpha=0.3, beta=0.8, early_stop = 5, mode = "iteration", do_backtrack = False, experiment_name = "softmax_reg_gd", gamma=2.0, tau=1e-4):
         super().__init__(num_classes, learning_rate, num_iterations, do_one_hot, lambda1, lambda2, momentum, alpha, beta, early_stop, mode, experiment_name)
         self.do_backtrack = do_backtrack
-        self.tau = tau,
+        self.tau = tau
         self.gamma = gamma
     # momentum: thay đổi momentum
     # alpha=0.3, beta=0.8
