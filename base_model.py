@@ -82,7 +82,6 @@ class BaseModel:
             
 
             if self.mode == "iteration":
-                
                 y_pred = predict(X_train, W, b)
                 loss = cross_entropy_loss(y_one_hot_train, y_pred) + self.lambda1 * np.sum(np.abs(W)) +  self.lambda2 * np.sum(W**2)
                 if i % 10 == 0:

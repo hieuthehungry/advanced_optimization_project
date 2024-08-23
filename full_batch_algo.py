@@ -4,10 +4,11 @@ from base_model import BaseModel
 
 class SoftmaxRegression(BaseModel):
     def __init__(self, num_classes, learning_rate=0.01, num_iterations=1000, do_one_hot=False, lambda1=0, lambda2=0,
-    momentum=0, alpha=0.3, beta=0.8, early_stop = 5, mode = "iteration", do_backtrack = False, experiment_name = "softmax_reg_gd"):
+    momentum=0, alpha=0.3, beta=0.8, early_stop = 5, mode = "iteration", do_backtrack = False, experiment_name = "softmax_reg_gd", gamma=2.0, tau=1e-4):
         super().__init__(num_classes, learning_rate, num_iterations, do_one_hot, lambda1, lambda2, momentum, alpha, beta, early_stop, mode, experiment_name)
         self.do_backtrack = do_backtrack
-
+        self.tau = tau,
+        self.gamma = gamma
     # momentum: thay đổi momentum
     # alpha=0.3, beta=0.8
     def __init_params__(self, X):
@@ -43,6 +44,24 @@ class SoftmaxRegression(BaseModel):
         
         # Backtracking line search
         if self.do_backtrack:
+            for _ in range(100):
+                v_w_prev = v_w
+                v_b_prev = v_b
+
+                v_w = self.momentum * v_w - self.learning_rate * dw
+                v_b = self.momentum * v_b - self.learning_rate * db
+
+                weights_temp = W - self.momentum * v_w_prev + (1 + self.momentum) * v_w
+                bias_temp = b - self.momentum * v_b_prev + (1 + self.momentum) * v_b
+
+                linear_output_temp = np.dot(X_train, weights_temp) + bias_temp
+                y_pred_temp = softmax(linear_output_temp)
+                loss_temp = cross_entropy_loss(y_train, y_pred_temp)
+                if loss_temp <  cross_entropy_loss(y_train, y_pred) - self.tau * self.gamma * self.learning_rate * (
+                    np.linalg.norm(dw) ** 2 + np.linalg.norm(db) ** 2):
+                    self.learning_rate *= self.gamma
+                else:
+                    break
             while True:
                 v_w_prev = v_w
                 v_b_prev = v_b
@@ -63,7 +82,7 @@ class SoftmaxRegression(BaseModel):
                     break
                 else:
                     self.learning_rate *= self.beta
-
+            
             W = weights_temp
             b = bias_temp
         else:
@@ -117,7 +136,7 @@ class SoftmaxAdam(BaseModel):
         self.beta1=beta1 
         self.beta2=beta2
         self.epsilon=epsilon
-        self.lambda1 = lambda1, 
+        self.lambda1 = lambda1
         self.lambda2= lambda2
         self.training_info["model_name"] = "softmax_adam"
         
