@@ -67,9 +67,9 @@ class SoftmaxRegressionSGD(BaseModel):
 
                     linear_output_temp = np.dot(X_batch, weights_temp) + bias_temp
                     y_pred_temp = softmax(linear_output_temp)
-                    loss_temp = cross_entropy_loss(y_batch, y_pred_temp) + self.lambda1 * np.sum(np.abs(W)) +  self.lambda2 * np.sum(W**2)
+                    loss_temp = cross_entropy_loss(y_batch, y_pred_temp)
 
-                    if loss_temp <= cross_entropy_loss(y_batch, y_pred)+ self.lambda1 * np.sum(np.abs(W)) +  self.lambda2 * np.sum(W**2) - self.alpha * self.learning_rate * (
+                    if loss_temp <= cross_entropy_loss(y_batch, y_pred) - self.alpha * self.learning_rate * (
                         np.linalg.norm(dw) ** 2 + np.linalg.norm(db) ** 2
                     ):
                         break
@@ -170,9 +170,9 @@ class SoftmaxRegressionMiniAdam(BaseModel):
 
                     linear_output_temp = np.dot(X_batch, weights_temp) + bias_temp
                     y_pred_temp = softmax(linear_output_temp)
-                    loss_temp = cross_entropy_loss(y_batch, y_pred_temp) + self.lambda1 * np.sum(np.abs(W)) +  self.lambda2 * np.sum(W**2)
+                    loss_temp = cross_entropy_loss(y_batch, y_pred_temp)
 
-                    if loss_temp <= cross_entropy_loss(y_batch, y_pred)+ self.lambda1 * np.sum(np.abs(W)) +  self.lambda2 * np.sum(W**2) - self.alpha * self.learning_rate * (
+                    if loss_temp <= cross_entropy_loss(y_batch, y_pred) - self.alpha * self.learning_rate * (
                         np.linalg.norm(dw) ** 2 + np.linalg.norm(db) ** 2
                     ):
                         break
