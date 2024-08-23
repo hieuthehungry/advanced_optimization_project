@@ -113,10 +113,10 @@ if  __name__ == "__main__":
         
         print(f"training with ver {ver}")
         # model = SoftmaxAdam(num_classes= Y_val.shape[1], early_stop= 100, learning_rate=0.01, do_one_hot= False, experiment_name=f"exp{ver}")
-        model = SoftmaxRegressionNewton(num_classes= Y_val.shape[1], early_stop= 5, learning_rate=1, do_one_hot= False, experiment_name=f"exp{ver}")
+        model = SoftmaxRegressionNewton(num_classes= Y_val.shape[1], early_stop= 5, learning_rate=1, do_one_hot= False)
         model.train(X_train, Y_train, X_val, Y_val)
         
-        val_acc[f"exp{model.training_info["model_name"]}{ver}"] = model.training_info["best_accuracy"]
+        val_acc[f"exp{model.training_info['model_name']}{ver}"] = model.training_info["best_accuracy"]
         
         with open(f"history/exp{ver}.pkl", "wb") as f:
             pkl.dump(model.training_info, f)

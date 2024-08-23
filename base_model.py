@@ -84,14 +84,14 @@ class BaseModel:
             if self.mode == "iteration":
                 
                 y_pred = predict(X_train, W, b)
-                loss = cross_entropy_loss(y_one_hot_train, y_pred)
+                loss = cross_entropy_loss(y_one_hot_train, y_pred) + self.lambda1 * np.sum(np.abs(W)) +  self.lambda2 * np.sum(W**2)
                 if i % 10 == 0:
                     print(f"Iteration {i}, Loss: {loss}")
 
                 params.__setattr__("loss", loss)
 
                 y_val_pred = predict(X_val, W, b)
-                val_loss = cross_entropy_loss(y_one_hot_val, y_val_pred)
+                val_loss = cross_entropy_loss(y_one_hot_val, y_val_pred) + self.lambda1 * np.sum(np.abs(W)) +  self.lambda2 * np.sum(W**2)
                 params.__setattr__("val_loss", val_loss)
 
                 Y_val_pred = np.argmax(predict(X_val, W, b), axis=1)
